@@ -406,18 +406,24 @@
             renderPreview();
             
             const cell = document.querySelector(`.image-cell[data-index="${index}"]`);
-            if (cell) setupEditingGestures(cell);
+            if (cell) {
+                setupEditingGestures(cell);
+                // Exit on double click
+                cell.ondblclick = () => { if (editingIndex !== null) saveEdit(); };
+            }
         }
 
         function setupEditingGestures(el) {
             el.onmousedown = e => {
-                // Remove scaling factor to make drag feel 1:1 with movement
-                startX = e.clientX - currentX;
-                startY = e.clientY - currentY;
+                // Initial capture of mouse vs current stored position
+                // We use the grid layout ratio to adjust sensitivity
+                startX = e.clientX - (currentX / gridCols);
+                startY = e.clientY - (currentY / gridRows);
                 
                 const onMouseMove = ev => {
-                    currentX = ev.clientX - startX;
-                    currentY = ev.clientY - startY;
+                    // Update movement with multipliers based on grid layout
+                    currentX = (ev.clientX - startX) * gridCols;
+                    currentY = (ev.clientY - startY) * gridRows;
                     updateEditingUI();
                 };
                 const onMouseUp = () => {
@@ -430,8 +436,8 @@
 
             el.ontouchstart = e => {
                 if (e.touches.length === 1) {
-                    startX = e.touches[0].clientX - currentX;
-                    startY = e.touches[0].clientY - currentY;
+                    startX = e.touches[0].clientX - (currentX / gridCols);
+                    startY = e.touches[0].clientY - (currentY / gridRows);
                 } else if (e.touches.length === 2) {
                     startDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
                 }
@@ -440,8 +446,8 @@
             el.ontouchmove = e => {
                 e.preventDefault();
                 if (e.touches.length === 1) {
-                    currentX = e.touches[0].clientX - startX;
-                    currentY = e.touches[0].clientY - startY;
+                    currentX = (e.touches[0].clientX - startX) * gridCols;
+                    currentY = (e.touches[0].clientY - startY) * gridRows;
                 } else if (e.touches.length === 2) {
                     const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
                     const delta = dist / startDist;
@@ -456,7 +462,8 @@
             if (editingIndex === null) return;
             const img = document.querySelector(`.image-cell[data-index="${editingIndex}"] img`);
             if (img) {
-                // Apply pure pixel values for 1:1 dragging feel
+                // Apply the transform visually. We divide by 5 to maintain 
+                // coordination with the PDF engine's internal scale.
                 img.style.transform = `translate(${currentX/5}px, ${currentY/5}px) scale(${currentScale})`;
             }
             images[editingIndex].zoom = Math.round(currentScale * 100);
@@ -464,6 +471,14 @@
             images[editingIndex].y = currentY;
             document.getElementById('input-zoom').value = images[editingIndex].zoom;
         }
+
+        function saveEdit() {
+            editingIndex = null;
+            editControlsBar.classList.remove('visible');
+            renderPreview();
+        }
+
+        document.getElementById('save-edit').onclick = saveEdit;
 
         document.getElementById('input-zoom').oninput = (e) => {
             currentScale = e.target.value / 100;
@@ -473,12 +488,6 @@
         document.getElementById('reset-edit').onclick = () => {
             currentScale = 1; currentX = 0; currentY = 0;
             updateEditingUI();
-        };
-
-        document.getElementById('save-edit').onclick = () => {
-            editingIndex = null;
-            editControlsBar.classList.remove('visible');
-            renderPreview();
         };
 
         document.getElementById('cancel-edit').onclick = () => {
@@ -504,6 +513,7 @@
                 const page = document.createElement('div');
                 page.className = `pdf-page ${orientation === 'p' ? 'portrait-page' : 'landscape-page'} rounded-2xl`;
                 
+                // Visual pixel calculation to match A4 proportions
                 const mmToPx = (orientation === 'p' ? 600/210 : 850/297);
                 const marginPx = marginSize * mmToPx;
                 page.style.padding = `${marginPx}px`;
