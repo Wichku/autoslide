@@ -101,19 +101,27 @@
             
             <div class="flex items-center gap-1.5">
                 <h1 class="text-[10px] font-black tracking-tighter text-slate-900 whitespace-nowrap hidden lg:block uppercase">Wk Auto slide</h1>
-                <div class="flex items-center bg-slate-100 px-2 py-1 rounded-lg border border-slate-200">
-                    <span class="text-[8px] font-black uppercase text-slate-400 mr-2">Grid</span>
-                    <select id="layout-select" onchange="setLayout(this.value)" class="bg-transparent text-[10px] font-bold text-slate-900 outline-none cursor-pointer">
-                        <option value="1">1</option>
-                        <option value="2">2</option>
-                        <option value="3">3</option>
-                        <option value="4" selected>4</option>
-                        <option value="5">5</option>
-                        <option value="6">6</option>
-                        <option value="7">7</option>
-                        <option value="8">8</option>
-                        <option value="9">9</option>
-                    </select>
+                
+                <!-- Visual Grid Picker Tool -->
+                <div class="relative group">
+                    <button id="grid-picker-btn" class="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-200 transition-colors">
+                        <div class="grid grid-cols-2 gap-0.5 w-3 h-3">
+                            <div class="bg-slate-400 rounded-[1px]"></div>
+                            <div class="bg-slate-400 rounded-[1px]"></div>
+                            <div class="bg-slate-400 rounded-[1px]"></div>
+                            <div class="bg-slate-400 rounded-[1px]"></div>
+                        </div>
+                        <span id="grid-display-text" class="text-[10px] font-bold text-slate-900">2 × 2</span>
+                    </button>
+                    
+                    <!-- Word-style Popover Grid -->
+                    <div id="grid-popover" class="absolute top-full left-0 mt-2 p-3 bg-white rounded-xl shadow-2xl border border-slate-200 hidden z-[70] min-w-[140px]">
+                        <div class="text-[8px] font-black uppercase text-slate-400 mb-2 tracking-widest text-center" id="picker-label">Select Layout</div>
+                        <div class="grid grid-cols-3 gap-1.5 mb-2" id="visual-matrix">
+                            <!-- JS will generate 9 squares here -->
+                        </div>
+                        <div id="matrix-status" class="text-[9px] font-bold text-blue-600 text-center">2 by 2 Table</div>
+                    </div>
                 </div>
             </div>
 
@@ -138,7 +146,6 @@
             </div>
 
             <div class="flex items-center gap-1.5">
-                <!-- Add Blank Photo Button -->
                 <button id="add-blank-btn" class="p-2 bg-slate-100 text-slate-600 rounded-full shadow-sm hover:bg-slate-200 active:scale-90 transition-all border border-slate-200" title="Add Blank Space">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                 </button>
@@ -197,6 +204,8 @@
 
     <script>
         let images = []; 
+        let gridCols = 2;
+        let gridRows = 2;
         let photosPerPage = 4;
         let selectedIndex = null;
         let editingIndex = null;
@@ -208,7 +217,6 @@
         let currentY = 0;
         let startX, startY, startDist;
 
-        // White 1x1 Pixel Data URL for Blank Photos
         const BLANK_PHOTO_SRC = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==";
 
         const fileInput = document.getElementById('file-input');
@@ -223,6 +231,66 @@
         const mainCanvas = document.getElementById('main-canvas');
         const clearBtn = document.getElementById('clear-btn');
         const addBlankBtn = document.getElementById('add-blank-btn');
+        const gridPickerBtn = document.getElementById('grid-picker-btn');
+        const gridPopover = document.getElementById('grid-popover');
+        const visualMatrix = document.getElementById('visual-matrix');
+        const matrixStatus = document.getElementById('matrix-status');
+        const gridDisplayText = document.getElementById('grid-display-text');
+
+        function initGridPicker() {
+            visualMatrix.innerHTML = '';
+            for (let r = 1; r <= 3; r++) {
+                for (let c = 1; c <= 3; c++) {
+                    const square = document.createElement('div');
+                    square.className = 'w-8 h-8 rounded-md border-2 border-slate-100 cursor-pointer transition-all hover:scale-105';
+                    square.dataset.r = r;
+                    square.dataset.c = c;
+                    
+                    square.onmouseenter = () => highlightMatrix(r, c);
+                    square.onclick = () => selectMatrix(r, c);
+                    
+                    visualMatrix.appendChild(square);
+                }
+            }
+            highlightMatrix(gridRows, gridCols);
+        }
+
+        function highlightMatrix(rows, cols) {
+            const squares = visualMatrix.querySelectorAll('div');
+            squares.forEach(s => {
+                const r = parseInt(s.dataset.r);
+                const c = parseInt(s.dataset.c);
+                if (r <= rows && c <= cols) {
+                    s.classList.replace('border-slate-100', 'border-blue-500');
+                    s.classList.add('bg-blue-50');
+                } else {
+                    s.classList.replace('border-blue-500', 'border-slate-100');
+                    s.classList.remove('bg-blue-50');
+                }
+            });
+            matrixStatus.textContent = `${cols} by ${rows} Table`;
+        }
+
+        function selectMatrix(rows, cols) {
+            gridCols = cols;
+            gridRows = rows;
+            photosPerPage = gridCols * gridRows;
+            gridDisplayText.textContent = `${gridCols} × ${gridRows}`;
+            gridPopover.classList.add('hidden');
+            renderPreview();
+        }
+
+        gridPickerBtn.onclick = (e) => {
+            e.stopPropagation();
+            gridPopover.classList.toggle('hidden');
+            highlightMatrix(gridRows, gridCols);
+        };
+
+        window.addEventListener('click', (e) => {
+            if (!gridPopover.contains(e.target) && e.target !== gridPickerBtn) {
+                gridPopover.classList.add('hidden');
+            }
+        });
 
         uploadTrigger.onclick = () => fileInput.click();
         fileInput.onchange = e => handleFiles(e.target.files);
@@ -293,28 +361,6 @@
             }
             fileInput.value = '';
             renderPreview();
-        }
-
-        function setLayout(num) {
-            photosPerPage = parseInt(num);
-            renderPreview();
-        }
-
-        function getGridDimensions(n, orientation) {
-            if (n === 1) return { cols: 1, rows: 1 };
-            if (orientation === 'p') {
-                if (n === 2) return { cols: 1, rows: 2 };
-                if (n === 3) return { cols: 1, rows: 3 };
-                if (n === 4) return { cols: 2, rows: 2 };
-                if (n <= 6) return { cols: 2, rows: 3 };
-                return { cols: 3, rows: 3 };
-            } else {
-                if (n === 2) return { cols: 2, rows: 1 };
-                if (n === 3) return { cols: 3, rows: 1 };
-                if (n === 4) return { cols: 2, rows: 2 };
-                if (n <= 6) return { cols: 3, rows: 2 };
-                return { cols: 3, rows: 3 };
-            }
         }
 
         function handleCellClick(e, index) {
@@ -435,8 +481,6 @@
 
             const margin = parseInt(marginInput.value);
             const showNums = pageNumToggle.checked;
-            
-            const { cols, rows } = getGridDimensions(photosPerPage, orient);
             const totalPages = Math.ceil(images.length / photosPerPage);
 
             for (let p = 0; p < totalPages; p++) {
@@ -445,8 +489,8 @@
                 page.style.padding = `${margin}mm`;
                 page.style.display = 'grid';
                 page.style.gap = '6px';
-                page.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
-                page.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+                page.style.gridTemplateColumns = `repeat(${gridCols}, 1fr)`;
+                page.style.gridTemplateRows = `repeat(${gridRows}, 1fr)`;
 
                 for (let j = 0; j < photosPerPage; j++) {
                     const globalIdx = (p * photosPerPage) + j;
@@ -463,7 +507,6 @@
                         const img = new Image();
                         img.src = images[globalIdx].src;
                         img.className = 'max-w-full max-h-full object-contain pointer-events-none';
-                        // Adjust preview offset relative to cell scale
                         img.style.transform = `translate(${images[globalIdx].x/5}px, ${images[globalIdx].y/5}px) scale(${images[globalIdx].zoom/100})`;
                         
                         cell.appendChild(img);
@@ -515,20 +558,18 @@
 
             const pw = doc.internal.pageSize.getWidth();
             const ph = doc.internal.pageSize.getHeight();
-            
-            const { cols, rows } = getGridDimensions(photosPerPage, orient);
-
             const gap = 2;
-            const cellW = (pw - (2 * margin) - (cols - 1) * gap) / cols;
-            const cellH = (ph - (2 * margin) - (rows - 1) * gap) / rows;
+            
+            const cellW = (pw - (2 * margin) - (gridCols - 1) * gap) / gridCols;
+            const cellH = (ph - (2 * margin) - (gridRows - 1) * gap) / gridRows;
 
             for (let i = 0; i < images.length; i++) {
                 if (i > 0 && i % photosPerPage === 0) doc.addPage();
                 
                 const data = images[i];
                 const pos = i % photosPerPage;
-                const col = pos % cols;
-                const row = Math.floor(pos / cols);
+                const col = pos % gridCols;
+                const row = Math.floor(pos / gridCols);
                 const dx = margin + (col * (cellW + gap));
                 const dy = margin + (row * (cellH + gap));
 
@@ -541,13 +582,11 @@
                 const resolutionScale = 4; 
                 canvas.width = cellW * resolutionScale * 5; 
                 canvas.height = cellH * resolutionScale * 5;
-
                 ctx.fillStyle = '#FFFFFF';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
 
                 const imgAspect = img.width / img.height;
                 const cellAspect = canvas.width / canvas.height;
-
                 let baseW, baseH;
                 if (imgAspect > cellAspect) {
                     baseW = canvas.width;
@@ -560,7 +599,6 @@
                 const userZoom = data.zoom / 100;
                 const drawW = baseW * userZoom;
                 const drawH = baseH * userZoom;
-
                 const ox = (canvas.width / 2) + (data.x * resolutionScale) - (drawW / 2);
                 const oy = (canvas.height / 2) + (data.y * resolutionScale) - (drawH / 2);
 
@@ -579,7 +617,10 @@
             generateBtn.innerHTML = originalIcon;
         }
 
-        window.onload = renderPreview;
+        window.onload = () => {
+            initGridPicker();
+            renderPreview();
+        };
     </script>
 </body>
 </html>
