@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Wk Auto slide</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; -webkit-tap-highlight-color: transparent; overflow-x: hidden; }
+        
+        .pdf-page {
+            background: white;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            margin: 0 auto 3rem auto;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid #e2e8f0;
+            transition: all 0.3s ease;
+        }
+        .portrait-page { aspect-ratio: 210 / 297; width: 92vw; max-width: 600px; }
+        .landscape-page { aspect-ratio: 297 / 210; width: 95vw; max-width: 850px; }
+        
+        .image-cell {
+            position: relative;
+            background: #f8fafc;
+            overflow: hidden;
+            cursor: pointer;
+            border: 2px solid #f1f5f9;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .image-cell.selected { border: 4px solid #3b82f6; z-index: 20; box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2); }
+        
+        .insertion-cursor {
+            width: 4px;
+            height: 80%;
+            background: #3b82f6;
+            border-radius: 20px;
+            box-shadow: 0 0 12px rgba(59, 130, 246, 0.6);
+            animation: pulse 1.5s infinite;
+            display: none; /* Hidden by default */
+        }
+        .active .insertion-cursor { display: block; } /* Only show when active */
+
+        @keyframes pulse {
+            0% { opacity: 0.4; transform: scaleY(0.9); }
+            50% { opacity: 1; transform: scaleY(1); }
+            100% { opacity: 0.4; transform: scaleY(0.9); }
+        }
+
+        .insertion-zone {
+            width: 30px;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: cell;
+            z-index: 30;
+            transition: all 0.2s;
+        }
+        .insertion-zone:hover { background: rgba(59, 130, 246, 0.03); }
+
+        .page-num-label {
+            position: absolute;
+            bottom: 12px;
+            right: 18px;
+            font-size: 14px;
+            font-weight: 800;
+            color: #94a3b8;
+            pointer-events: none;
+        }
+
+        #gesture-area {
+            touch-action: none;
+            cursor: grab;
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #000;
+        }
+        #gesture-area:active { cursor: grabbing; }
+        .crop-handle {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            border: 2px solid rgba(255,255,255,0.5);
+            z-index: 10;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+
+    <header class="sticky top-0 z-[60] bg-white/90 backdrop-blur-xl border-b border-slate-200 px-2 py-2 shadow-sm">
+        <div class="max-w-[1400px] mx-auto flex items-center justify-between gap-1 sm:gap-3">
+            
+            <div class="flex items-center gap-1.5">
+                <h1 class="text-[10px] font-black tracking-tighter text-slate-900 whitespace-nowrap hidden lg:block uppercase">Wk Auto slide</h1>
+                <div class="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+                    <button onclick="setLayout(1)" id="btn-layout-1" class="px-2 py-1 text-[9px] font-bold transition-all text-slate-500 rounded-md">1</button>
+                    <button onclick="setLayout(4)" id="btn-layout-4" class="px-2 py-1 text-[9px] font-bold transition-all bg-white shadow-sm text-slate-900 rounded-md">4</button>
+                    <button onclick="setLayout(6)" id="btn-layout-6" class="px-2 py-1 text-[9px] font-bold transition-all text-slate-500 rounded-md">6</button>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-1.5 flex-1 justify-center">
+                <div class="hidden sm:flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded-full border border-slate-200">
+                    <span class="text-[8px] font-black uppercase text-slate-400">Margin</span>
+                    <input type="range" id="margin-input" min="0" max="40" value="10" class="w-12 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600">
+                    <span id="margin-val" class="text-[9px] font-bold text-blue-600 w-7">10mm</span>
+                </div>
+                
+                <select id="orientation" class="bg-white rounded-full text-[9px] font-bold uppercase outline-none cursor-pointer px-2 py-1 border border-slate-200 shadow-sm">
+                    <option value="p">Portrait</option>
+                    <option value="l">Landscape</option>
+                </select>
+
+                <label class="flex items-center gap-1 cursor-pointer bg-slate-50 px-2 py-1 rounded-full border border-slate-100">
+                    <input type="checkbox" id="page-num-toggle" checked class="w-3 h-3 rounded-full border-slate-300 text-blue-600">
+                    <span class="text-[8px] font-bold text-slate-500 uppercase">Page</span>
+                </label>
+
+                <button id="clear-btn" class="px-2 py-1 rounded-full text-[8px] font-black uppercase transition-all border border-slate-200 bg-slate-50 text-slate-400 hover:bg-slate-100">Clear</button>
+            </div>
+
+            <div class="flex items-center gap-1.5">
+                <button id="upload-trigger" class="p-2 bg-slate-900 text-white rounded-full shadow-lg active:scale-90 transition-all">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
+                </button>
+                <input type="file" id="file-input" multiple accept="image/*" class="hidden">
+
+                <button id="generate-btn" disabled class="p-2 bg-blue-600 text-white rounded-full shadow-lg shadow-blue-100 disabled:opacity-20 active:scale-90 transition-all">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main id="main-canvas" class="p-4 sm:p-8 min-h-[calc(100vh-60px)]">
+        <div id="empty-state" class="flex flex-col items-center justify-center py-40 text-slate-300">
+            <div class="w-16 h-16 bg-white rounded-3xl flex items-center justify-center mb-4 shadow-sm border border-slate-100">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+            </div>
+            <p class="text-xs font-semibold text-slate-400 uppercase tracking-widest">Select an insertion point & add photos</p>
+        </div>
+
+        <div id="preview-grid" class="flex flex-col items-center"></div>
+    </main>
+
+    <div id="edit-panel" class="fixed inset-0 z-[100] hidden flex flex-col bg-black">
+        <div class="flex items-center justify-between p-4 text-white safe-top">
+            <button id="cancel-edit" class="text-sm font-bold opacity-70">Cancel</button>
+            <span class="text-xs font-black tracking-widest uppercase">Adjust</span>
+            <button id="save-edit" class="px-6 py-2 bg-blue-600 rounded-full text-sm font-black text-white">Done</button>
+        </div>
+        
+        <div class="flex-1 relative flex items-center justify-center overflow-hidden">
+            <div id="gesture-area">
+                <img src="" id="editing-img" class="absolute pointer-events-none origin-center" style="transform: translate(0px, 0px) scale(1);">
+                <!-- Visual Crop Frame -->
+                <div class="crop-handle top-8 left-8 border-t-4 border-l-4 rounded-tl-lg"></div>
+                <div class="crop-handle top-8 right-8 border-t-4 border-r-4 rounded-tr-lg"></div>
+                <div class="crop-handle bottom-8 left-8 border-b-4 border-l-4 rounded-bl-lg"></div>
+                <div class="crop-handle bottom-8 right-8 border-b-4 border-r-4 rounded-br-lg"></div>
+            </div>
+        </div>
+
+        <div class="p-6 bg-zinc-950/90 backdrop-blur-md space-y-8 pb-12">
+            <div class="flex items-center justify-between text-[10px] font-bold text-zinc-500 uppercase">
+                <button id="reset-edit" class="hover:text-white px-4 py-2 border border-zinc-800 rounded-xl">Center</button>
+                <button id="delete-btn" class="text-red-500 font-black px-4 py-2 border border-red-900/30 rounded-xl bg-red-500/10">Remove Photo</button>
+            </div>
+            <div class="flex items-center gap-6">
+                <span class="text-white text-[10px] font-black">ZOOM</span>
+                <input type="range" id="input-zoom" min="50" max="800" value="100" class="flex-1 h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-blue-500">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let images = []; 
+        let photosPerPage = 4;
+        let selectedIndex = null;
+        let editingIndex = null;
+        let insertionIndex = 0;
+        let clearConfirming = false;
+
+        let currentScale = 1;
+        let currentX = 0;
+        let currentY = 0;
+        let startX, startY, startDist;
+
+        const fileInput = document.getElementById('file-input');
+        const uploadTrigger = document.getElementById('upload-trigger');
+        const previewGrid = document.getElementById('preview-grid');
+        const emptyState = document.getElementById('empty-state');
+        const generateBtn = document.getElementById('generate-btn');
+        const marginInput = document.getElementById('margin-input');
+        const orientationSelect = document.getElementById('orientation');
+        const pageNumToggle = document.getElementById('page-num-toggle');
+        const editPanel = document.getElementById('edit-panel');
+        const mainCanvas = document.getElementById('main-canvas');
+        const clearBtn = document.getElementById('clear-btn');
+
+        uploadTrigger.onclick = () => fileInput.click();
+        fileInput.onchange = e => handleFiles(e.target.files);
+        marginInput.oninput = (e) => {
+            document.getElementById('margin-val').textContent = e.target.value + 'mm';
+            renderPreview();
+        };
+        orientationSelect.onchange = renderPreview;
+        pageNumToggle.onchange = renderPreview;
+        generateBtn.onclick = generatePDF;
+
+        clearBtn.onclick = (e) => {
+            e.stopPropagation();
+            if (!clearConfirming) {
+                clearConfirming = true;
+                clearBtn.textContent = 'Confirm';
+                clearBtn.className = "px-3 py-1 rounded-full text-[8px] font-black uppercase transition-all bg-red-600 text-white shadow-lg";
+                // Auto-reset if not confirmed in 3 seconds
+                setTimeout(() => {
+                    if (clearConfirming) resetClearBtn();
+                }, 3000);
+            } else {
+                images = [];
+                insertionIndex = 0;
+                selectedIndex = null;
+                resetClearBtn();
+                renderPreview();
+            }
+        };
+
+        function resetClearBtn() {
+            clearConfirming = false;
+            clearBtn.textContent = 'Clear';
+            clearBtn.className = "px-2 py-1 rounded-full text-[8px] font-black uppercase transition-all border border-slate-200 bg-slate-50 text-slate-400 hover:bg-slate-100";
+        }
+
+        // Global deselect
+        window.onclick = (e) => {
+            if (e.target === mainCanvas || e.target === previewGrid) {
+                selectedIndex = null;
+                renderPreview();
+            }
+            if (clearConfirming && e.target !== clearBtn) {
+                resetClearBtn();
+            }
+        };
+
+        async function handleFiles(files) {
+            const validFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+            for (let file of validFiles) {
+                const reader = new FileReader();
+                await new Promise(resolve => {
+                    reader.onload = (e) => {
+                        images.splice(insertionIndex, 0, {
+                            src: e.target.result,
+                            zoom: 100, x: 0, y: 0
+                        });
+                        insertionIndex++;
+                        resolve();
+                    };
+                    reader.readAsDataURL(file);
+                });
+            }
+            fileInput.value = '';
+            renderPreview();
+        }
+
+        function setLayout(num) {
+            photosPerPage = num;
+            [1, 4, 6].forEach(n => {
+                const btn = document.getElementById(`btn-layout-${n}`);
+                btn.className = n === num ? 
+                    "px-2 py-1 text-[9px] font-bold transition-all bg-white shadow-sm text-slate-900 rounded-md" : 
+                    "px-2 py-1 text-[9px] font-bold transition-all text-slate-500 rounded-md hover:bg-slate-200";
+            });
+            renderPreview();
+        }
+
+        function handleCellClick(e, index) {
+            e.stopPropagation();
+            if (selectedIndex === null) {
+                selectedIndex = index;
+                renderPreview();
+            } else if (selectedIndex === index) {
+                openEditPanel(index);
+                selectedIndex = null;
+            } else {
+                const temp = images[selectedIndex];
+                images[selectedIndex] = images[index];
+                images[index] = temp;
+                selectedIndex = null;
+                renderPreview();
+            }
+        }
+
+        const gestureArea = document.getElementById('gesture-area');
+        const editingImg = document.getElementById('editing-img');
+
+        function openEditPanel(index) {
+            editingIndex = index;
+            const data = images[index];
+            editingImg.src = data.src;
+            currentScale = data.zoom / 100;
+            currentX = data.x;
+            currentY = data.y;
+            updateTransform();
+            document.getElementById('input-zoom').value = data.zoom;
+            editPanel.classList.remove('hidden');
+        }
+
+        function updateTransform() {
+            editingImg.style.transform = `translate(${currentX}px, ${currentY}px) scale(${currentScale})`;
+            images[editingIndex].x = currentX;
+            images[editingIndex].y = currentY;
+            images[editingIndex].zoom = Math.round(currentScale * 100);
+            document.getElementById('input-zoom').value = images[editingIndex].zoom;
+        }
+
+        gestureArea.onmousedown = e => {
+            startX = e.clientX - currentX;
+            startY = e.clientY - currentY;
+            const handleMouseMove = ev => {
+                currentX = ev.clientX - startX;
+                currentY = ev.clientY - startY;
+                updateTransform();
+            };
+            const handleMouseUp = () => {
+                window.removeEventListener('mousemove', handleMouseMove);
+                window.removeEventListener('mouseup', handleMouseUp);
+            };
+            window.addEventListener('mousemove', handleMouseMove);
+            window.addEventListener('mouseup', handleMouseUp);
+        };
+
+        gestureArea.ontouchstart = e => {
+            if (e.touches.length === 1) {
+                startX = e.touches[0].clientX - currentX;
+                startY = e.touches[0].clientY - currentY;
+            } else if (e.touches.length === 2) {
+                startDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+            }
+        };
+
+        gestureArea.ontouchmove = e => {
+            e.preventDefault();
+            if (e.touches.length === 1) {
+                currentX = e.touches[0].clientX - startX;
+                currentY = e.touches[0].clientY - startY;
+            } else if (e.touches.length === 2) {
+                const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+                const delta = dist / startDist;
+                currentScale *= delta;
+                startDist = dist;
+            }
+            updateTransform();
+        };
+
+        document.getElementById('input-zoom').oninput = (e) => {
+            currentScale = e.target.value / 100;
+            updateTransform();
+        };
+
+        document.getElementById('reset-edit').onclick = () => {
+            currentScale = 1; currentX = 0; currentY = 0;
+            updateTransform();
+        };
+
+        document.getElementById('save-edit').onclick = () => {
+            editPanel.classList.add('hidden');
+            renderPreview();
+        };
+
+        document.getElementById('cancel-edit').onclick = () => editPanel.classList.add('hidden');
+
+        document.getElementById('delete-btn').onclick = () => {
+            images.splice(editingIndex, 1);
+            if (insertionIndex > editingIndex) insertionIndex--;
+            editPanel.classList.add('hidden');
+            renderPreview();
+        };
+
+        function renderPreview() {
+            previewGrid.innerHTML = '';
+            if (images.length === 0) {
+                emptyState.classList.remove('hidden');
+                generateBtn.disabled = true;
+                previewGrid.appendChild(createInsertionZone(0));
+                return;
+            }
+            emptyState.classList.add('hidden');
+            generateBtn.disabled = false;
+
+            const orient = orientationSelect.value;
+            const margin = parseInt(marginInput.value);
+            const showNums = pageNumToggle.checked;
+            
+            let cols, rows;
+            if (photosPerPage === 1) { cols = 1; rows = 1; }
+            else if (photosPerPage === 4) { cols = 2; rows = 2; }
+            else { cols = 2; rows = 3; }
+
+            const totalPages = Math.ceil(images.length / photosPerPage);
+
+            for (let p = 0; p < totalPages; p++) {
+                const page = document.createElement('div');
+                page.className = `pdf-page ${orient === 'p' ? 'portrait-page' : 'landscape-page'} rounded-2xl`;
+                page.style.padding = `${margin}mm`;
+                page.style.display = 'grid';
+                page.style.gap = '8px';
+                page.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+                page.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+
+                for (let j = 0; j < photosPerPage; j++) {
+                    const globalIdx = (p * photosPerPage) + j;
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'relative h-full w-full flex';
+
+                    // Zone before
+                    wrapper.appendChild(createInsertionZone(globalIdx));
+
+                    if (globalIdx < images.length) {
+                        const cell = document.createElement('div');
+                        cell.className = `image-cell rounded-xl flex-1 ${selectedIndex === globalIdx ? 'selected' : ''}`;
+                        cell.onclick = (e) => handleCellClick(e, globalIdx);
+
+                        const img = new Image();
+                        img.src = images[globalIdx].src;
+                        img.className = 'max-w-full max-h-full object-contain pointer-events-none';
+                        img.style.transform = `translate(${images[globalIdx].x/5}px, ${images[globalIdx].y/5}px) scale(${images[globalIdx].zoom/100})`;
+                        
+                        cell.appendChild(img);
+                        wrapper.appendChild(cell);
+
+                        // Special Zone after last image
+                        if (globalIdx === images.length - 1) {
+                            wrapper.appendChild(createInsertionZone(images.length, true));
+                        }
+                    } else {
+                        const empty = document.createElement('div');
+                        empty.className = 'flex-1 bg-slate-50/50 border border-dashed border-slate-100 rounded-xl';
+                        wrapper.appendChild(empty);
+                    }
+                    page.appendChild(wrapper);
+                }
+
+                if (showNums) {
+                    const n = document.createElement('div');
+                    n.className = 'page-num-label';
+                    n.textContent = p + 1;
+                    page.appendChild(n);
+                }
+                previewGrid.appendChild(page);
+            }
+        }
+
+        function createInsertionZone(idx, isLast = false) {
+            const zone = document.createElement('div');
+            // Shift position slightly for the last zone
+            const posClass = isLast ? 'absolute -right-3' : 'absolute -left-3';
+            zone.className = `top-0 bottom-0 insertion-zone ${posClass} ${insertionIndex === idx ? 'active' : ''}`;
+            zone.innerHTML = '<div class="insertion-cursor"></div>';
+            zone.onclick = (e) => { 
+                e.stopPropagation();
+                insertionIndex = idx; 
+                renderPreview(); 
+            };
+            return zone;
+        }
+
+        async function generatePDF() {
+            const { jsPDF } = window.jspdf;
+            const orient = orientationSelect.value;
+            const margin = parseInt(marginInput.value);
+            const doc = new jsPDF({ orientation: orient, unit: 'mm', format: 'a4' });
+            
+            generateBtn.disabled = true;
+            const originalIcon = generateBtn.innerHTML;
+            generateBtn.innerHTML = '<div class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>';
+
+            const pw = doc.internal.pageSize.getWidth();
+            const ph = doc.internal.pageSize.getHeight();
+            
+            let cols, rows;
+            if (photosPerPage === 1) { cols = 1; rows = 1; }
+            else if (photosPerPage === 4) { cols = 2; rows = 2; }
+            else { cols = 2; rows = 3; }
+
+            const gap = 2;
+            const cellW = (pw - (2 * margin) - (cols - 1) * gap) / cols;
+            const cellH = (ph - (2 * margin) - (rows - 1) * gap) / rows;
+
+            for (let i = 0; i < images.length; i++) {
+                if (i > 0 && i % photosPerPage === 0) doc.addPage();
+                
+                const data = images[i];
+                const pos = i % photosPerPage;
+                const col = pos % cols;
+                const row = Math.floor(pos / cols);
+                const dx = margin + (col * (cellW + gap));
+                const dy = margin + (row * (cellH + gap));
+
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                const img = new Image();
+                img.src = data.src;
+                await new Promise(r => img.onload = r);
+
+                canvas.width = 1600;
+                canvas.height = 1600 * (cellH / cellW);
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                const scale = data.zoom / 100;
+                const imgAspect = img.width / img.height;
+                const canvasAspect = canvas.width / canvas.height;
+
+                let drawW, drawH;
+                if (imgAspect > canvasAspect) {
+                    drawH = canvas.height * scale;
+                    drawW = drawH * imgAspect;
+                } else {
+                    drawW = canvas.width * scale;
+                    drawH = drawW / imgAspect;
+                }
+
+                // Coordinate mapping from editor to PDF
+                const ox = (canvas.width / 2) + (data.x * 4) - (drawW / 2);
+                const oy = (canvas.height / 2) + (data.y * 4) - (drawH / 2);
+
+                ctx.drawImage(img, ox, oy, drawW, drawH);
+                doc.addImage(canvas.toDataURL('image/jpeg', 0.9), 'JPEG', dx, dy, cellW, cellH);
+
+                if (pageNumToggle.checked && (pos === photosPerPage - 1 || i === images.length - 1)) {
+                    doc.setFontSize(10);
+                    doc.setTextColor(150, 150, 150);
+                    doc.text(`${Math.floor(i / photosPerPage) + 1}`, pw - margin - 2, ph - 8, { align: 'right' });
+                }
+            }
+
+            doc.save(`Wk-Slide-${Date.now()}.pdf`);
+            generateBtn.disabled = false;
+            generateBtn.innerHTML = originalIcon;
+        }
+
+        window.onload = renderPreview;
+    </script>
+</body>
+</html>
