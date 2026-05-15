@@ -513,30 +513,41 @@
                 img.src = data.src;
                 await new Promise(r => img.onload = r);
 
-                canvas.width = 1600;
-                canvas.height = 1600 * (cellH / cellW);
+                // High resolution canvas for the cell
+                const resolutionScale = 4; 
+                canvas.width = cellW * resolutionScale * 5; 
+                canvas.height = cellH * resolutionScale * 5;
+
                 ctx.fillStyle = '#FFFFFF';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-                const scale = data.zoom / 100;
                 const imgAspect = img.width / img.height;
-                const canvasAspect = canvas.width / canvas.height;
+                const cellAspect = canvas.width / canvas.height;
 
-                let drawW, drawH;
-                if (imgAspect > canvasAspect) {
-                    drawH = canvas.height * scale;
-                    drawW = drawH * imgAspect;
+                let baseW, baseH;
+                // Standard "Contain" logic: fitting image in box without stretching
+                if (imgAspect > cellAspect) {
+                    baseW = canvas.width;
+                    baseH = canvas.width / imgAspect;
                 } else {
-                    drawW = canvas.width * scale;
-                    drawH = drawW / imgAspect;
+                    baseH = canvas.height;
+                    baseW = canvas.height * imgAspect;
                 }
 
-                // Coordinate mapping from editor to PDF
-                const ox = (canvas.width / 2) + (data.x * 4) - (drawW / 2);
-                const oy = (canvas.height / 2) + (data.y * 4) - (drawH / 2);
+                // Apply user zoom and panning
+                const userZoom = data.zoom / 100;
+                const drawW = baseW * userZoom;
+                const drawH = baseH * userZoom;
+
+                // Center the "contained" image first, then apply user X/Y offsets
+                // The factor of 4/5 aligns the preview coordinate system with the PDF resolution
+                const ox = (canvas.width / 2) + (data.x * resolutionScale) - (drawW / 2);
+                const oy = (canvas.height / 2) + (data.y * resolutionScale) - (drawH / 2);
 
                 ctx.drawImage(img, ox, oy, drawW, drawH);
-                doc.addImage(canvas.toDataURL('image/jpeg', 0.9), 'JPEG', dx, dy, cellW, cellH);
+                
+                // Add to PDF without compression stretching
+                doc.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', dx, dy, cellW, cellH);
 
                 if (pageNumToggle.checked && (pos === photosPerPage - 1 || i === images.length - 1)) {
                     doc.setFontSize(10);
