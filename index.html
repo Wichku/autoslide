@@ -48,12 +48,13 @@
         }
         .image-cell.selected { border: 4px solid #3b82f6; z-index: 20; box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2); }
         
-        /* The specific "Everything else is dimmer" logic */
+        /* Removed global dimming. Using a distinct gray border for editing state. */
         .image-cell.is-editing {
             z-index: 100;
-            box-shadow: 0 0 0 5000px rgba(0,0,0,0.7);
             cursor: move;
-            border-color: #3b82f6;
+            border: 4px solid #94a3b8; /* Gray highlight for editing */
+            box-shadow: 0 0 20px rgba(0,0,0,0.15);
+            background: white;
         }
 
         .image-cell img {
@@ -408,20 +409,22 @@
             const cell = document.querySelector(`.image-cell[data-index="${index}"]`);
             if (cell) {
                 setupEditingGestures(cell);
-                // Exit on double click
-                cell.ondblclick = () => { if (editingIndex !== null) saveEdit(); };
+                // Exit edit mode on double click
+                cell.ondblclick = (e) => { 
+                    e.stopPropagation();
+                    saveEdit(); 
+                };
             }
         }
 
         function setupEditingGestures(el) {
             el.onmousedown = e => {
-                // Initial capture of mouse vs current stored position
-                // We use the grid layout ratio to adjust sensitivity
+                // Adjusting start coordinates based on grid multipliers for 1:1 feel at scale
                 startX = e.clientX - (currentX / gridCols);
                 startY = e.clientY - (currentY / gridRows);
                 
                 const onMouseMove = ev => {
-                    // Update movement with multipliers based on grid layout
+                    // APPLYING PROPORTIONAL SPEED: X * Cols, Y * Rows
                     currentX = (ev.clientX - startX) * gridCols;
                     currentY = (ev.clientY - startY) * gridRows;
                     updateEditingUI();
@@ -446,6 +449,7 @@
             el.ontouchmove = e => {
                 e.preventDefault();
                 if (e.touches.length === 1) {
+                    // APPLYING PROPORTIONAL SPEED: X * Cols, Y * Rows
                     currentX = (e.touches[0].clientX - startX) * gridCols;
                     currentY = (e.touches[0].clientY - startY) * gridRows;
                 } else if (e.touches.length === 2) {
