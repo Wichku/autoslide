@@ -600,7 +600,7 @@
                 // Append consistent branding footnote to preview pages
                 const fn = document.createElement('div');
                 fn.className = 'page-footnote';
-                fn.innerHTML = 'WK-EASYPDF on <a href="https://wichku.github.io/autoslide/" target="_blank" class="hover:underline">https://wichku.github.io/autoslide/</a>';
+                fn.innerHTML = 'Enjoy more tools from https://wichku.github.io/Wk/';
                 page.appendChild(fn);
 
                 if (showPageNums) {
@@ -699,7 +699,7 @@
                     // Footnote text (Grey)
                     doc.setFontSize(8);
                     doc.setTextColor(150, 150, 150);
-                    doc.text("Create by WK-EASYSLIDE on https://wichku.github.io/autoslide/", 8, ph - 8);
+                    doc.text("Create by WK-EASYPDF on https://wichku.github.io/autoslide/", 8, ph - 8);
 
                     if (showPageNums) {
                         const pageStr = `${Math.floor(i / photosPerPage) + 1}`;
