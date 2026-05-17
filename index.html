@@ -99,8 +99,30 @@
             right: 18px;
             font-size: 14px;
             font-weight: 800;
+            color: #000000;
+            /* White text shadow stroke for premium readability on photos */
+            text-shadow:
+                -1.5px -1.5px 0 #fff,
+                 1.5px -1.5px 0 #fff,
+                -1.5px  1.5px 0 #fff,
+                 1.5px  1.5px 0 #fff,
+                -1.5px  0px   0 #fff,
+                 1.5px  0px   0 #fff,
+                 0px   -1.5px 0 #fff,
+                 0px    1.5px 0 #fff;
+            pointer-events: none;
+            z-index: 40;
+        }
+
+        .page-footnote {
+            position: absolute;
+            bottom: 12px;
+            left: 18px;
+            font-size: 10px;
+            font-weight: 500;
             color: #94a3b8;
             pointer-events: none;
+            z-index: 40;
         }
 
         .delete-corner-btn {
@@ -179,6 +201,7 @@
                     </svg>
                 </button>
 
+                <!-- Clears the workspace. Click once to arm, twice to commit. Stay Red on hover. -->
                 <button id="clear-btn" class="w-14 py-1 rounded-full text-[8px] font-black uppercase transition-all border border-slate-200 bg-slate-50 text-slate-400 hover:bg-slate-100 text-center overflow-hidden">Clear</button>
             </div>
 
@@ -340,6 +363,7 @@
             if (!clearConfirming) {
                 clearConfirming = true;
                 clearBtn.textContent = 'Confirm';
+                // Lock button in red and prevent it from turning grey on hover
                 clearBtn.className = "w-14 py-1 rounded-full text-[8px] font-black uppercase transition-all bg-red-600 hover:bg-red-700 active:bg-red-800 text-white shadow-lg text-center overflow-hidden";
                 setTimeout(() => { if (clearConfirming) resetClearBtn(); }, 3000);
             } else {
@@ -573,6 +597,12 @@
                     page.appendChild(wrapper);
                 }
 
+                // Append consistent branding footnote to preview pages
+                const fn = document.createElement('div');
+                fn.className = 'page-footnote';
+                fn.innerHTML = 'Create by <a href="https://wichku.github.io/autoslide/" target="_blank" class="hover:underline">https://wichku.github.io/autoslide/</a>';
+                page.appendChild(fn);
+
                 if (showPageNums) {
                     const n = document.createElement('div');
                     n.className = 'page-num-label';
@@ -664,9 +694,30 @@
                 ctx.drawImage(img, ox, oy, drawW, drawH);
                 doc.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', dx, dy, cellW, cellH);
 
-                if (showPageNums && (pos === photosPerPage - 1 || i === images.length - 1)) {
-                    doc.setFontSize(10); doc.setTextColor(150, 150, 150);
-                    doc.text(`${Math.floor(i / photosPerPage) + 1}`, pw - 5, ph - 8, { align: 'right' });
+                // Add branding footnote and page numbers at the end of each physical page compilation
+                if (pos === photosPerPage - 1 || i === images.length - 1) {
+                    // Footnote text (Grey)
+                    doc.setFontSize(8);
+                    doc.setTextColor(150, 150, 150);
+                    doc.text("Create by WK-EASYSLIDE on https://wichku.github.io/autoslide/", 8, ph - 8);
+
+                    if (showPageNums) {
+                        const pageStr = `${Math.floor(i / photosPerPage) + 1}`;
+                        doc.setFontSize(10);
+                        
+                        // Draw outline shadow (white) to protect readability over overlapping images
+                        doc.setTextColor(255, 255, 255);
+                        const offsets = [-0.15, 0.15];
+                        for (let oxOffset of offsets) {
+                            for (let oyOffset of offsets) {
+                                doc.text(pageStr, pw - 8 + oxOffset, ph - 8 + oyOffset, { align: 'right' });
+                            }
+                        }
+                        
+                        // Draw solid black text on top
+                        doc.setTextColor(0, 0, 0);
+                        doc.text(pageStr, pw - 8, ph - 8, { align: 'right' });
+                    }
                 }
             }
 
